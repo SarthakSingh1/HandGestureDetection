@@ -1,2 +1,2 @@
 # Zachary Baum
-2/14/2024
+2/14/2024: Had meeting with TA about the project proposal and what we neededd to add and get rid of. The main things were to trim down the high level objectives, be more clear in the block diagram, and better structure the subsystem descriptions. We also asked about power going into the raspberry pi and if it would be consideredd an external module
