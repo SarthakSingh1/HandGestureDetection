@@ -1,2 +1,4 @@
 # Zachary Baum
 2/14/2024: Had meeting with TA about the project proposal and what we neededd to add and get rid of. The main things were to trim down the high level objectives, be more clear in the block diagram, and better structure the subsystem descriptions. We also asked about power going into the raspberry pi and if it would be consideredd an external module
+
+2/20/2024: Couldnt attend meetings due to sickness but worked on the design document specfically the audio subsystem for the requirements and veruification portion. I also researched what ampiflier and speaker we should use as well as discussed DSP functionality of the project with partners.
