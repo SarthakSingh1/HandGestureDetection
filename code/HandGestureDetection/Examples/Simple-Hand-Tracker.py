@@ -44,7 +44,7 @@ with handsModule.Hands(static_image_mode=False, min_detection_confidence=0.7, mi
                           #print(normalizedLandmark)
             
            #Below shows the current frame to the desktop 
-           cv2.imshow("Frame", frame1);
+           cv2.imshow("Frame", frame1)
            key = cv2.waitKey(1) & 0xFF
            
            #Below states that if the |q| is press on the keyboard it will stop the system
