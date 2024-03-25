@@ -77,7 +77,7 @@ while True:
      print(down)
      
      
-     cv2.imshow("Frame", frame1);
+     cv2.imshow("Frame", frame1)
      key = cv2.waitKey(1) & 0xFF
      
      #My Additions

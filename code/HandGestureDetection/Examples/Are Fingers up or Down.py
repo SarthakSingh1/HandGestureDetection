@@ -2,8 +2,9 @@
 #there too as an easer egg)
 import cv2
 from collections import Counter
-from module import findnameoflandmark,findpostion,speak
+from module import findnameoflandmark,findpostion
 import math
+import time 
 
 #Use CV2 Functionality to create a Video stream and add some values + variables
 cap = cv2.VideoCapture(0)
@@ -54,14 +55,7 @@ while True:
      print('This many fingers are down - ', down)
      
      #Below shows the current frame to the desktop 
-     cv2.imshow("Frame", frame1);
+     cv2.imshow("Frame", frame1)
      key = cv2.waitKey(1) & 0xFF
+     time.sleep(1)
      
-     
-     #Below will speak out load when |s| is pressed on the keyboard about what fingers are up or down
-     if key == ord("q"):
-        speak("you have"+str(up)+"fingers up  and"+str(down)+"fingers down") 
-     
-     #Below states that if the |s| is press on the keyboard it will stop the system
-     if key == ord("s"):
-       break
