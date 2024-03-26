@@ -181,10 +181,8 @@ void HAL_I2SEx_TxRxCpltCallback(I2S_HandleTypeDef *hi2s) {
 
 
 void ProcessAudioEffects() {
-    // Example: Choose which effect to apply based on the application state
-    // This is a placeholder; actual implementation would depend on specific requirements
 
-    // Assuming input samples are converted from rxBuf to a float array before processing
+//input samples are converted from rxBuf to a float array before processing
     // and output samples are converted back to txBuf after processing
 	//manage the state (such as useFIR and useDistortion flags) to control which effects are applied during runtime.
 
