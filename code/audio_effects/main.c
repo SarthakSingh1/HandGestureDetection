@@ -62,8 +62,11 @@ sampling frequency: 48000 Hz
 #define FILTER_TAP_NUM 17
 #define BLOCK_SIZE_FLOAT 512
 #define BLOCK_SIZE_U16 2048
+#define REVERB_BUFFER_SIZE 4800 // 100ms delay at 48kHz
+#define REVERB_FEEDBACK 0.5f // Feedback coefficient
+#define REVERB_MIX 0.3f // Mix between original and reverb signal
 
-static float filter_taps[FILTER_TAP_NUM] = {
+ float lpf_taps[FILTER_TAP_NUM] = {
   -0.0021834891907904987,
   0.023133081888390004,
   0.03440125360693663,
@@ -83,26 +86,60 @@ static float filter_taps[FILTER_TAP_NUM] = {
   -0.0021834891907904987
 };
 
-
+ float hpf_taps[FILTER_TAP_NUM] = {
+     // high-pass filter coefficients here
+ };
 
 
 
 // Global buffers for I2S DMA
 uint16_t rxBuf[BLOCK_SIZE_U16 * 2];
 uint16_t txBuf[BLOCK_SIZE_U16 * 2];
+uint8_t useGainUp = 0; // 0 means gain up effect is off, 1 means on
+uint8_t useGainDown = 0; // 0 means gain down effect is off, 1 means on
+uint8_t callback_state = 0;
+uint8_t useReverb = 0; // Control flag for reverb effect
+uint8_t useLPF = 0; // Control flag for low-pass filter effect
+uint8_t useHPF = 0; // Control flag for high-pass filter effect
 
-
+float gainFactorDown = 0.8; // Example gain factor for decreasing volume
+float gainFactorUp = 1.2; // Example gain factor for increasing volume
+float reverbBuffer[REVERB_BUFFER_SIZE];
 float l_buf_in [BLOCK_SIZE_FLOAT*2];
 float r_buf_in [BLOCK_SIZE_FLOAT*2];
 float l_buf_out [BLOCK_SIZE_FLOAT*2];
 float r_buf_out [BLOCK_SIZE_FLOAT*2];
 
-// Buffer for FIR filter data
+
 static float firData[FILTER_TAP_NUM];
 static int firPtr[FILTER_TAP_NUM];
 static int firWPtr = 0;
+int reverbWriteIndex = 0;
 
-uint8_t callback_state = 0;
+
+float ApplyGain(float sample, float gainFactor) {
+    return sample * gainFactor;
+}
+
+
+
+float ApplyReverb(float inputSample) {
+    // Calculate the read index
+    int readIndex = reverbWriteIndex - REVERB_BUFFER_SIZE / 2;
+    if (readIndex < 0) readIndex += REVERB_BUFFER_SIZE;
+
+    // Read the delayed sample and apply feedback
+    float delayedSample = reverbBuffer[readIndex] * REVERB_FEEDBACK;
+
+    // Write the new sample to the buffer
+    reverbBuffer[reverbWriteIndex++] = inputSample + delayedSample;
+
+    // Wrap the write index
+    if (reverbWriteIndex >= REVERB_BUFFER_SIZE) reverbWriteIndex = 0;
+
+    // Mix the original and delayed samples
+    return inputSample * (1.0f - REVERB_MIX) + delayedSample * REVERB_MIX;
+}
 
 
 float Do_Distortion (float insample) {
@@ -153,12 +190,24 @@ int main(void)
 }
 
 
-void Process_FIR(float* input, float* output, int blockSize) {
+void Process_LPF(float* input, float* output, int blockSize) {
     for (int n = 0; n < blockSize; ++n) {
         float outSample = 0.0f;
-        for (int i = 0; i < FILTER_TAP_NUM; ++i) {
+        for (int i = 0; i < LPF_TAP_NUM; ++i) {
             int index = (n - i + blockSize) % blockSize; // Circular buffer indexing
-            outSample += input[index] * filter_taps[i];
+            outSample += input[index] * lpf_taps[i];
+        }
+        output[n] = outSample;
+    }
+}
+
+
+void Process_HPF(float* input, float* output, int blockSize) {
+    for (int n = 0; n < blockSize; ++n) {
+        float outSample = 0.0f;
+        for (int i = 0; i < HPF_TAP_NUM; ++i) {
+            int index = (n - i + blockSize) % blockSize; // Circular buffer indexing
+            outSample += input[index] * hpf_taps[i];
         }
         output[n] = outSample;
     }
@@ -181,19 +230,46 @@ void HAL_I2SEx_TxRxCpltCallback(I2S_HandleTypeDef *hi2s) {
 
 
 void ProcessAudioEffects() {
+    // Example: Choose which effect to apply based on the application state
+    // This is a placeholder; actual implementation would depend on specific requirements
 
-//input samples are converted from rxBuf to a float array before processing
+    // Assuming input samples are converted from rxBuf to a float array before processing
     // and output samples are converted back to txBuf after processing
 	//manage the state (such as useFIR and useDistortion flags) to control which effects are applied during runtime.
 
-    if (useFIR) {
-        Process_FIR(l_buf_in, l_buf_out, BLOCK_SIZE_FLOAT);
-        // Additional logic to handle right channel if stereo
+    // Apply LPF effect if enabled
+    if (useLPF) {
+        Process_LPF(l_buf_in, l_buf_out, BLOCK_SIZE_FLOAT);
+        // Process right channel if needed
+    }
+
+    // Apply HPF effect if enabled
+    if (useHPF) {
+        Process_HPF(l_buf_in, l_buf_out, BLOCK_SIZE_FLOAT);
+        // Process right channel if needed
     }
     if (useDistortion) {
         for (int i = 0; i < BLOCK_SIZE_FLOAT; ++i) {
             l_buf_out[i] = Do_Distortion(l_buf_in[i]);
-            // Additional logic for right channel
+        }
+    }
+
+    // Apply gain down if enabled
+    if (useGainDown) {
+        for (int i = 0; i < BLOCK_SIZE_FLOAT; ++i) {
+            l_buf_out[i] = ApplyGain(l_buf_out[i], gainFactorDown);
+        }
+    }
+    // Apply gain up if enabled
+    if (useGainUp) {
+        for (int i = 0; i < BLOCK_SIZE_FLOAT; ++i) {
+            l_buf_out[i] = ApplyGain(l_buf_out[i], gainFactorUp);
+        }
+    }
+    // Apply reverb effect if enabled
+    if (useReverb) {
+        for (int i = 0; i < BLOCK_SIZE_FLOAT; ++i) {
+            l_buf_out[i] = ApplyReverb(l_buf_out[i]);
         }
     }
 
