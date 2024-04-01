@@ -38,5 +38,3 @@ while True:
                 down += 1
             print(f"{fingers_name[i]} is {finger}")
         print(f"Total Fingers Up: {up}  Down: {down}")
-
-    time.sleep(1)
