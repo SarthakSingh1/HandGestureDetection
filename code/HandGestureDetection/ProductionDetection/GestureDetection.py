@@ -76,44 +76,50 @@ gpio_value = 0
 
 try:
     while True:
-        ret, frame = cameraCapture.read()  # Gets a frame
-        frame1 = cv2.resize(frame, (640, 480))
-        a = findpostion(frame1)
-        # print_coords(a)
+        try: 
+            ret, frame = cameraCapture.read()  # Gets a frame
+            frame1 = cv2.resize(frame, (640, 480))
+            a = findpostion(frame1)
 
-        # if hand exists
-        if len(a) > 0:
-            fingers = []
+            # print_coords(a)
 
-            for id in range(0, 4):
-                tip = a[tips[id]][2:]
-                joint = a[joints[id]][2:]
-                if tip < joint:
-                    fingers.append(1)
-                else:
-                    fingers.append(0)
+            # if hand exists
+            if len(a) > 0:
+                fingers = []
 
-            up, down = 0, 0
-            for i in range(4):
-                value = fingers[i]
-                if value:
-                    finger = "up"
-                    up += 1
-                else:
-                    finger = "down"
-                    down += 1
-            #     print(f"{fingers_name[i]} is {finger}")
-            # print(f"Total Fingers Up: {up}  Down: {down}")
+                for id in range(0, 4):
+                    tip = a[tips[id]][2:]
+                    joint = a[joints[id]][2:]
+                    if tip < joint:
+                        fingers.append(1)
+                    else:
+                        fingers.append(0)
 
-            state, gpio_temp = match_gesture(fingers)
+                up, down = 0, 0
+                for i in range(4):
+                    value = fingers[i]
+                    if value:
+                        finger = "up"
+                        up += 1
+                    else:
+                        finger = "down"
+                        down += 1
+                #     print(f"{fingers_name[i]} is {finger}")
+                # print(f"Total Fingers Up: {up}  Down: {down}")
 
-            if gpio_temp != -1:
-                if gpio_temp != gpio_value:
-                    gpio_value = gpio_temp
-                    curr_state = state
-                    print(f"New gesture detected {curr_state}")
-                    set_gpio(gpio_value)
+                state, gpio_temp = match_gesture(fingers)
+
+                if gpio_temp != -1:
+                    if gpio_temp != gpio_value:
+                        gpio_value = gpio_temp
+                        curr_state = state
+                        print(f"New gesture detected {curr_state}")
+                        set_gpio(gpio_value)
+        except Exception as e:
+            print(e)
+            print("image error, continuing")
 
         print(f"Current state: {curr_state} current gpio: {gpio_value}")
 except KeyboardInterrupt:
-    GPIO.cleanup() 
+    print("Running cleanup")
+    GPIO.cleanup()
