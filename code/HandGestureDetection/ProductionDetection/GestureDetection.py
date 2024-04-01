@@ -1,7 +1,41 @@
 import mediapipe
 import cv2
 from utils import findpostion, print_coords
+import RPi.GPIO as GPIO
 import time
+
+# GPIO Basic initialization
+GPIO.setmode(GPIO.BCM)
+GPIO.setwarnings(False)
+
+# GPIO port numbers
+bit_1 = 17
+bit_2 = 27
+bit_3 = 22
+
+bit_1_value = 0
+bit_2_value = 0
+bit_3_value = 0
+
+GPIO.setup(bit_1, GPIO.OUT)
+GPIO.setup(bit_2, GPIO.OUT)
+GPIO.setup(bit_3, GPIO.OUT)
+
+
+def set_gpio(number):
+    global bit_1_value, bit_2_value, bit_3_value
+    if number > 7 or number < 0:
+        print("Cannot represent")
+        return
+    else:
+        binary_number = format(number, "03b")
+        bit_1_value = int(binary_number[0])
+        bit_2_value = int(binary_number[1])
+        bit_3_value = int(binary_number[2])
+
+        GPIO.output(bit_1, bit_1_value)
+        GPIO.output(bit_2, bit_2_value)
+        GPIO.output(bit_3, bit_3_value)
 
 
 cameraCapture = cv2.VideoCapture(0)
@@ -47,6 +81,7 @@ while True:
     # if hand exists
     if len(a) > 0:
         fingers = []
+
         for id in range(0, 4):
             tip = a[tips[id]][2:]
             joint = a[joints[id]][2:]
@@ -69,12 +104,11 @@ while True:
 
         gpio_temp, state = match_gesture(fingers)
 
-        if gpio_temp == -1:
-            continue
-        else:
-            gpio_value = gpio_temp
-            curr_state = state
-            print(f"New gesture detected {curr_state}")
-            
-    print(f"Current state: {curr_state} current gpio: {gpio_value}")
+        if gpio_temp != -1:
+            if gpio_temp != gpio_value:
+                gpio_value = gpio_temp
+                curr_state = state
+                print(f"New gesture detected {curr_state}")
+                set_gpio(gpio_value)
 
+    print(f"Current state: {curr_state} current gpio: {gpio_value}")
