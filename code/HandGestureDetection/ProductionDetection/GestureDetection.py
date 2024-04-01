@@ -73,6 +73,7 @@ def match_gesture(fingers):
 curr_state = "Nothing"
 gpio_value = 0
 
+
 while True:
     ret, frame = cameraCapture.read()  # Gets a frame
     frame1 = cv2.resize(frame, (640, 480))
