@@ -37,6 +37,7 @@ def set_gpio(number):
         GPIO.output(bit_2, bit_2_value)
         GPIO.output(bit_3, bit_3_value)
 
+set_gpio(0)
 
 cameraCapture = cv2.VideoCapture(0)
 tips = [8, 12, 16, 20]  # 20 landmarks total and these are all the tip of each finger
@@ -102,7 +103,7 @@ while True:
         #     print(f"{fingers_name[i]} is {finger}")
         # print(f"Total Fingers Up: {up}  Down: {down}")
 
-        gpio_temp, state = match_gesture(fingers)
+        state, gpio_temp = match_gesture(fingers)
 
         if gpio_temp != -1:
             if gpio_temp != gpio_value:
