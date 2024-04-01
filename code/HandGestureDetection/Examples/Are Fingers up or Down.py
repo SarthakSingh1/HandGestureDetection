@@ -39,7 +39,7 @@ while True:
         
         fingers=[] 
         for id in range(0,4):
-            if a[tip[id]][2:] < a[tip[id]-2][2:]:
+            if (a[tip[id]])[2:] < (a[tip[id]-2])[2:]:
                print(b[tipname[id]])
 
                fingers.append(1)

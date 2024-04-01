@@ -10,7 +10,7 @@ import os
 drawingModule = mp.solutions.drawing_utils
 handsModule = mp.solutions.hands
 
-mod = handsModule.Hands()
+# mod = handsModule.Hands()
 
 
 h = 480
@@ -19,17 +19,18 @@ w = 640
 
 def findpostion(frame1):
     list = []
-    results = mod.process(cv2.cvtColor(frame1, cv2.COLOR_BGR2RGB))
-    if results.multi_hand_landmarks != None:
-        for handLandmarks in results.multi_hand_landmarks:
-            drawingModule.draw_landmarks(
-                frame1, handLandmarks, handsModule.HAND_CONNECTIONS
-            )
-            list = []
-            for id, pt in enumerate(handLandmarks.landmark):
-                x = int(pt.x * w)
-                y = int(pt.y * h)
-                list.append([id, x, y])
+    with handsModule.Hands(static_image_mode=False, min_detection_confidence=0.7, t=0.7, max_num_hands=2) as mod:
+        results = mod.process(cv2.cvtColor(frame1, cv2.COLOR_BGR2RGB))
+        if results.multi_hand_landmarks != None:
+            for handLandmarks in results.multi_hand_landmarks:
+                drawingModule.draw_landmarks(
+                    frame1, handLandmarks, handsModule.HAND_CONNECTIONS
+                )
+                list = []
+                for id, pt in enumerate(handLandmarks.landmark):
+                    x = int(pt.x * w)
+                    y = int(pt.y * h)
+                    list.append([id, x, y])
 
     return list
 
