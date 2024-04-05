@@ -182,9 +182,11 @@ int main(void)
   HAL_I2SEx_TransmitReceive_DMA (&hi2s2, txBuf, rxBuf, 4);
 
 
-  while (1)
+  while (1) 
   {
-
+      ReadGesture(); // Call this at regular intervals
+          // Other tasks...
+      HAL_Delay(100); // Delay for 100 ms
   }
 
 }
@@ -228,6 +230,50 @@ void HAL_I2SEx_TxRxCpltCallback(I2S_HandleTypeDef *hi2s) {
     ProcessAudioEffects(); // Function to decide and call the appropriate effect
 }
 
+
+void ReadGesture(void) {
+    uint8_t gesture = (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0) << 2) | // Bit 2
+                      (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1) << 1) | // Bit 1
+                      HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_2);         // Bit 0
+    // Reset all effects first
+    useLPF = 0;
+    useHPF = 0;
+    useGainUp = 0;
+    useGainDown = 0;
+    useReverb = 0;
+    useDistortion = 0;
+
+    switch(gesture) {
+        case 0: // Closed Hand
+            // All effects off, already reset above
+            break;
+        case 1: // Rock & Roll
+            useLPF = 1;
+            break;
+        case 2: // Peace
+            useHPF = 1;
+            break;
+        case 3: // Index Up
+            useGainUp = 1;
+            break;
+        case 4: // All Fingers Up
+            useGainDown = 1;
+            break;
+        case 5: // Pinky
+            useReverb = 1;
+            break;
+        case 6: // Custom gesture for Distortion
+            useDistortion = 1;
+            break;
+        case 7: // Another custom gesture (Reserved for future use)
+            // Activate any other effect or combination here
+            break;
+        default:
+            // Handle unexpected values if necessary
+            break;
+    }
+    return gesture; // For debugging or further processing
+}
 
 void ProcessAudioEffects() {
     // Example: Choose which effect to apply based on the application state
@@ -275,6 +321,25 @@ void ProcessAudioEffects() {
 
     // Logic to convert l_buf_out (and r_buf_out) back to txBuf format goes here
 }
+
+
+void EXTI0_IRQHandler(void) {
+    HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_0); // Handle EXTI line 0 interrupt
+}
+
+void EXTI1_IRQHandler(void) {
+    HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_1); // Handle EXTI line 1 interrupt
+}
+
+void EXTI2_IRQHandler(void) {
+    HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_2); // Handle EXTI line 2 interrupt
+}
+
+// Callback function called by HAL_GPIO_EXTI_IRQHandler
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
+    ReadGesture(); // Process the gesture
+}
+
 
 void SystemClock_Config(void)
 {
@@ -411,29 +476,40 @@ static void MX_DMA_Init(void)
   */
 static void MX_GPIO_Init(void)
 {
-  GPIO_InitTypeDef GPIO_InitStruct = {0};
-/* USER CODE BEGIN MX_GPIO_Init_1 */
-/* USER CODE END MX_GPIO_Init_1 */
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
 
-  /* GPIO Ports Clock Enable */
-  __HAL_RCC_GPIOH_CLK_ENABLE();
-  __HAL_RCC_GPIOC_CLK_ENABLE();
-  __HAL_RCC_GPIOB_CLK_ENABLE();
-  __HAL_RCC_GPIOA_CLK_ENABLE();
+    /* GPIO Ports Clock Enable */
+    __HAL_RCC_GPIOH_CLK_ENABLE();
+    __HAL_RCC_GPIOC_CLK_ENABLE();
+    __HAL_RCC_GPIOB_CLK_ENABLE();
+    __HAL_RCC_GPIOA_CLK_ENABLE(); // Ensure GPIO port A's clock is enabled
 
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
+    /*Configure GPIO pin Output Level */
+    HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pin : LED_Pin */
-  GPIO_InitStruct.Pin = LED_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(LED_GPIO_Port, &GPIO_InitStruct);
+    /*Configure GPIO pin : LED_Pin */
+    GPIO_InitStruct.Pin = LED_Pin;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(LED_GPIO_Port, &GPIO_InitStruct);
 
-/* USER CODE BEGIN MX_GPIO_Init_2 */
-/* USER CODE END MX_GPIO_Init_2 */
+    // Additional code for configuring GPIOA pins as input
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+    GPIO_InitStruct.Pin = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2;
+    GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING_FALLING; // Interrupt Mode
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+    // Enable and set EXTI Line[0:2] Interrupt to the given priority
+    HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(EXTI0_IRQn);
+    HAL_NVIC_SetPriority(EXTI1_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(EXTI1_IRQn);
+    HAL_NVIC_SetPriority(EXTI2_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(EXTI2_IRQn);
 }
+
 
 /* USER CODE BEGIN 4 */
 
