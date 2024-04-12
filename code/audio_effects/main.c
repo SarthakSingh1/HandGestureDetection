@@ -21,8 +21,9 @@
 #include "usb_device.h"
 #include "arm_math.h"  // Include CMSIS-DSP header
 #include <math.h>
-
-
+#include "fatfs.h"  //audio stuff
+#include "stm32f4xx_hal.h" //for sd card stuff
+#include <math.h> //for mathematical operations
 /* Private variables ---------------------------------------------------------*/
 
 
@@ -38,7 +39,7 @@ static void MX_GPIO_Init(void);
 static void MX_DMA_Init(void);
 static void MX_I2C2_Init(void);
 static void MX_I2S2_Init(void);
-
+static void MX_SDIO_SD_Init(void);
 
 
 /*
@@ -104,6 +105,11 @@ uint8_t useLPF = 0; // Control flag for low-pass filter effect
 uint8_t useHPF = 0; // Control flag for high-pass filter effect
 uint8_t useDistortion = 0;
 
+SD_HandleTypeDef hsd;
+HAL_SD_CardInfoTypedef SDCardInfo;
+FATFS SDFatFs;  // File system object for SD card logical drive
+FIL MyFile;     // File object
+char SDPath[4]; // SD card logical drive path
 float gainFactorDown = 0.8; // Example gain factor for decreasing volume
 float gainFactorUp = 1.2; // Example gain factor for increasing volume
 float reverbBuffer[REVERB_BUFFER_SIZE];
@@ -233,6 +239,21 @@ void HAL_I2SEx_TxRxCpltCallback(I2S_HandleTypeDef *hi2s) {
     ProcessAudioEffects(); // Function to decide and call the appropriate effect
 }
 
+// Convert 16-bit PCM data to floating point for processing
+void PCM16_to_Float(int16_t *input, float *output, size_t numSamples) {
+    for (size_t i = 0; i < numSamples; i++) {
+        output[i] = (float)input[i] / 32768.0f; // Convert to range [-1, 1]
+    }
+}
+
+// Convert processed floating point audio back to 16-bit PCM
+void Float_to_PCM16(float *input, int16_t *output, size_t numSamples) {
+    for (size_t i = 0; i < numSamples; i++) {
+        if (input[i] < -1.0f) input[i] = -1.0f;
+        else if (input[i] > 1.0f) input[i] = 1.0f;
+        output[i] = (int16_t)(input[i] * 32767.0f);
+    }
+}
 
 void ReadGesture(void) {
     uint8_t gesture = (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0) << 2) | // Bit 2
@@ -278,51 +299,87 @@ void ReadGesture(void) {
     return gesture; // For debugging or further processing
 }
 
-void ProcessAudioEffects() {
-    // Example: Choose which effect to apply based on the application state
-    // This is a placeholder; actual implementation would depend on specific requirements
+void ReadAudioFile() {
+    UINT br;  // Variable to store the number of bytes read
+    BYTE buffer[2048];  // Buffer to store read data
 
-    // Assuming input samples are converted from rxBuf to a float array before processing
-    // and output samples are converted back to txBuf after processing
-	//manage the state (such as useFIR and useDistortion flags) to control which effects are applied during runtime.
-
-    // Apply LPF effect if enabled
-    if (useLPF) {
-        Process_LPF(l_buf_in, l_buf_out, BLOCK_SIZE_FLOAT);
-        // Process right channel if needed
+    // Open the file with read access
+    if(f_open(&MyFile, "audiofile.wav", FA_READ) != FR_OK) {
+        // Error handling
+        Error_Handler();
     }
 
-    // Apply HPF effect if enabled
+    while(!f_eof(&MyFile)) {
+        // Read data in blocks of 2048 bytes
+        if(f_read(&MyFile, buffer, sizeof(buffer), &br) != FR_OK) {
+            // Error handling
+            break;
+        }
+        // Process and/or transmit data
+        ProcessAudio(buffer, br);
+    }
+
+    // Close the file
+    f_close(&MyFile);
+}
+
+void ProcessAudioAndEffects(uint8_t *data, UINT size) {
+    int numSamples = size / 4; // Assuming 16-bit stereo data
+    int16_t *pcmData = (int16_t *)data;
+    static float l_buf_in[BLOCK_SIZE_FLOAT];
+    static float r_buf_in[BLOCK_SIZE_FLOAT];
+    static float l_buf_out[BLOCK_SIZE_FLOAT];
+    static float r_buf_out[BLOCK_SIZE_FLOAT];
+
+    // Convert 16-bit PCM to float
+    for (int i = 0; i < numSamples; i += 2) {
+        l_buf_in[i / 2] = (float)pcmData[i] / 32768.0f;
+        r_buf_in[i / 2] = (float)pcmData[i + 1] / 32768.0f;
+    }
+
+    // Reset output buffers
+    memset(l_buf_out, 0, sizeof(l_buf_out));
+    memset(r_buf_out, 0, sizeof(r_buf_out));
+
+    // Apply effects based on flags
+    if (useLPF) {
+        Process_LPF(l_buf_in, l_buf_out, numSamples / 2);
+        Process_LPF(r_buf_in, r_buf_out, numSamples / 2);
+    }
     if (useHPF) {
-        Process_HPF(l_buf_in, l_buf_out, BLOCK_SIZE_FLOAT);
-        // Process right channel if needed
+        Process_HPF(l_buf_in, l_buf_out, numSamples / 2);
+        Process_HPF(r_buf_in, r_buf_out, numSamples / 2);
+    }
+    if (useReverb) {
+        for (int i = 0; i < numSamples / 2; i++) {
+            l_buf_out[i] = ApplyReverb(l_buf_in[i]);
+            r_buf_out[i] = ApplyReverb(r_buf_in[i]);
+        }
+    }
+    if (useGainUp) {
+        for (int i = 0; i < numSamples / 2; i++) {
+            l_buf_out[i] = ApplyGain(l_buf_out[i], gainFactorUp);
+            r_buf_out[i] = ApplyGain(r_buf_out[i], gainFactorUp);
+        }
+    }
+    if (useGainDown) {
+        for (int i = 0; i < numSamples / 2; i++) {
+            l_buf_out[i] = ApplyGain(l_buf_out[i], gainFactorDown);
+            r_buf_out[i] = ApplyGain(r_buf_out[i], gainFactorDown);
+        }
     }
     if (useDistortion) {
-        for (int i = 0; i < BLOCK_SIZE_FLOAT; ++i) {
+        for (int i = 0; i < numSamples / 2; i++) {
             l_buf_out[i] = Do_Distortion(l_buf_in[i]);
+            r_buf_out[i] = Do_Distortion(r_buf_in[i]);
         }
     }
 
-    // Apply gain down if enabled
-    if (useGainDown) {
-        for (int i = 0; i < BLOCK_SIZE_FLOAT; ++i) {
-            l_buf_out[i] = ApplyGain(l_buf_out[i], gainFactorDown);
-        }
+    // Convert float back to 16-bit PCM
+    for (int i = 0; i < numSamples; i += 2) {
+        pcmData[i] = (int16_t)(l_buf_out[i / 2] * 32767.0f);
+        pcmData[i + 1] = (int16_t)(r_buf_out[i / 2] * 32767.0f);
     }
-    // Apply gain up if enabled
-    if (useGainUp) {
-        for (int i = 0; i < BLOCK_SIZE_FLOAT; ++i) {
-            l_buf_out[i] = ApplyGain(l_buf_out[i], gainFactorUp);
-        }
-    }
-    // Apply reverb effect if enabled
-    if (useReverb) {
-        for (int i = 0; i < BLOCK_SIZE_FLOAT; ++i) {
-            l_buf_out[i] = ApplyReverb(l_buf_out[i]);
-        }
-    }
-
-    // Logic to convert l_buf_out (and r_buf_out) back to txBuf format goes here
 }
 
 
@@ -445,6 +502,52 @@ static void MX_DMA_Init(void)
   HAL_NVIC_EnableIRQ(DMA1_Stream4_IRQn);
 
 }
+
+
+
+void MX_SDIO_SD_Init(void)
+{
+    // Initialize SDIO peripheral
+    hsd.Instance = SDIO;
+    hsd.Init.ClockEdge = SDIO_CLOCK_EDGE_RISING;
+    hsd.Init.ClockBypass = SDIO_CLOCK_BYPASS_DISABLE;
+    hsd.Init.ClockPowerSave = SDIO_CLOCK_POWER_SAVE_DISABLE;
+    hsd.Init.BusWide = SDIO_BUS_WIDE_1B;
+    hsd.Init.HardwareFlowControl = SDIO_HARDWARE_FLOW_CONTROL_DISABLE;
+    hsd.Init.ClockDiv = SDIO_TRANSFER_CLK_DIV; // Set according to your clock configuration needs
+
+    // Initialize the SD card
+    if (HAL_SD_Init(&hsd) != HAL_OK)
+    {
+        Error_Handler();
+    }
+
+    // Configure the SD Bus width (1 bit or 4 bits)
+    if (HAL_SD_ConfigWideBusOperation(&hsd, SDIO_BUS_WIDE_4B) != HAL_OK)
+    {
+        Error_Handler();
+    }
+
+    // Get Card Info
+    HAL_SD_GetCardInfo(&hsd, &SDCardInfo);
+}
+
+
+
+void MX_FATFS_Init(void) {
+    // Link the SD card driver
+    if(FATFS_LinkDriver(&SD_Driver, SDPath) == 0) {
+        // Mount the file system
+        if(f_mount(&SDFatFs, (TCHAR const*)SDPath, 0) != FR_OK) {
+            // Error handling
+            Error_Handler();
+        }
+    } else {
+        // Driver linking error handling
+        Error_Handler();
+    }
+}
+
 
 /**
   * @brief GPIO Initialization Function
