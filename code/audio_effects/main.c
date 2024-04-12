@@ -21,10 +21,11 @@
 #include "usb_device.h"
 #include "arm_math.h"  // Include CMSIS-DSP header
 #include <math.h>
-
-
+#include "fatfs.h"  //audio stuff
+#include "stm32f4xx_hal.h" //for sd card stuff
+#include <math.h> //for mathematical operations
 /* Private variables ---------------------------------------------------------*/
-I2C_HandleTypeDef hi2c2;
+
 
 I2S_HandleTypeDef hi2s2;
 DMA_HandleTypeDef hdma_spi2_tx;
@@ -38,6 +39,7 @@ static void MX_GPIO_Init(void);
 static void MX_DMA_Init(void);
 static void MX_I2C2_Init(void);
 static void MX_I2S2_Init(void);
+static void MX_SDIO_SD_Init(void);
 
 
 /*
@@ -101,7 +103,13 @@ uint8_t callback_state = 0;
 uint8_t useReverb = 0; // Control flag for reverb effect
 uint8_t useLPF = 0; // Control flag for low-pass filter effect
 uint8_t useHPF = 0; // Control flag for high-pass filter effect
+uint8_t useDistortion = 0;
 
+SD_HandleTypeDef hsd;
+HAL_SD_CardInfoTypedef SDCardInfo;
+FATFS SDFatFs;  // File system object for SD card logical drive
+FIL MyFile;     // File object
+char SDPath[4]; // SD card logical drive path
 float gainFactorDown = 0.8; // Example gain factor for decreasing volume
 float gainFactorUp = 1.2; // Example gain factor for increasing volume
 float reverbBuffer[REVERB_BUFFER_SIZE];
@@ -177,6 +185,7 @@ int main(void)
   MX_I2C2_Init();
   MX_I2S2_Init();
   MX_USB_DEVICE_Init();
+  MX_I2C2_Init();
 
 
   HAL_I2SEx_TransmitReceive_DMA (&hi2s2, txBuf, rxBuf, 4);
@@ -184,7 +193,9 @@ int main(void)
 
   while (1)
   {
-
+      ReadGesture(); // Call this at regular intervals
+          // Other tasks...
+      HAL_Delay(100); // Delay for 100 ms
   }
 
 }
@@ -193,7 +204,7 @@ int main(void)
 void Process_LPF(float* input, float* output, int blockSize) {
     for (int n = 0; n < blockSize; ++n) {
         float outSample = 0.0f;
-        for (int i = 0; i < LPF_TAP_NUM; ++i) {
+        for (int i = 0; i < FILTER_TAP_NUM; ++i) {
             int index = (n - i + blockSize) % blockSize; // Circular buffer indexing
             outSample += input[index] * lpf_taps[i];
         }
@@ -205,7 +216,7 @@ void Process_LPF(float* input, float* output, int blockSize) {
 void Process_HPF(float* input, float* output, int blockSize) {
     for (int n = 0; n < blockSize; ++n) {
         float outSample = 0.0f;
-        for (int i = 0; i < HPF_TAP_NUM; ++i) {
+        for (int i = 0; i < FILTER_TAP_NUM; ++i) {
             int index = (n - i + blockSize) % blockSize; // Circular buffer indexing
             outSample += input[index] * hpf_taps[i];
         }
@@ -219,62 +230,176 @@ void Process_HPF(float* input, float* output, int blockSize) {
   */
 
 void HAL_I2SEx_TxRxHalfCpltCallback(I2S_HandleTypeDef *hi2s) {
-    callbackState = 1; // Indicate half transfer complete
+    callback_state = 1; // Indicate half transfer complete
     ProcessAudioEffects(); // Function to decide and call the appropriate effect
 }
 
 void HAL_I2SEx_TxRxCpltCallback(I2S_HandleTypeDef *hi2s) {
-    callbackState = 2; // Indicate full transfer complete
+    callback_state = 2; // Indicate full transfer complete
     ProcessAudioEffects(); // Function to decide and call the appropriate effect
 }
 
+// Convert 16-bit PCM data to floating point for processing
+void PCM16_to_Float(int16_t *input, float *output, size_t numSamples) {
+    for (size_t i = 0; i < numSamples; i++) {
+        output[i] = (float)input[i] / 32768.0f; // Convert to range [-1, 1]
+    }
+}
 
-void ProcessAudioEffects() {
-    // Example: Choose which effect to apply based on the application state
-    // This is a placeholder; actual implementation would depend on specific requirements
+// Convert processed floating point audio back to 16-bit PCM
+void Float_to_PCM16(float *input, int16_t *output, size_t numSamples) {
+    for (size_t i = 0; i < numSamples; i++) {
+        if (input[i] < -1.0f) input[i] = -1.0f;
+        else if (input[i] > 1.0f) input[i] = 1.0f;
+        output[i] = (int16_t)(input[i] * 32767.0f);
+    }
+}
 
-    // Assuming input samples are converted from rxBuf to a float array before processing
-    // and output samples are converted back to txBuf after processing
-	//manage the state (such as useFIR and useDistortion flags) to control which effects are applied during runtime.
+void ReadGesture(void) {
+    uint8_t gesture = (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0) << 2) | // Bit 2
+                      (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1) << 1) | // Bit 1
+                      HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_2);         // Bit 0
+    // Reset all effects first
+    useLPF = 0;
+    useHPF = 0;
+    useGainUp = 0;
+    useGainDown = 0;
+    useReverb = 0;
+    useDistortion = 0;
 
-    // Apply LPF effect if enabled
-    if (useLPF) {
-        Process_LPF(l_buf_in, l_buf_out, BLOCK_SIZE_FLOAT);
-        // Process right channel if needed
+    switch(gesture) {
+        case 0: // Closed Hand
+            // All effects off, already reset above
+            break;
+        case 1: // Rock & Roll
+            useLPF = 1;
+            break;
+        case 2: // Peace
+            useHPF = 1;
+            break;
+        case 3: // Index Up
+            useGainUp = 1;
+            break;
+        case 4: // All Fingers Up
+            useGainDown = 1;
+            break;
+        case 5: // Pinky
+            useReverb = 1;
+            break;
+        case 6: // Custom gesture for Distortion
+            useDistortion = 1;
+            break;
+        case 7: // Another custom gesture (Reserved for future use)
+            // Activate any other effect or combination here
+            break;
+        default:
+            // Handle unexpected values if necessary
+            break;
+    }
+    return gesture; // For debugging or further processing
+}
+
+void ReadAudioFile() {
+    UINT br;  // Variable to store the number of bytes read
+    BYTE buffer[2048];  // Buffer to store read data
+
+    // Open the file with read access
+    if(f_open(&MyFile, "audiofile.wav", FA_READ) != FR_OK) {
+        // Error handling
+        Error_Handler();
     }
 
-    // Apply HPF effect if enabled
+    while(!f_eof(&MyFile)) {
+        // Read data in blocks of 2048 bytes
+        if(f_read(&MyFile, buffer, sizeof(buffer), &br) != FR_OK) {
+            // Error handling
+            break;
+        }
+        // Process and/or transmit data
+        ProcessAudio(buffer, br);
+    }
+
+    // Close the file
+    f_close(&MyFile);
+}
+
+void ProcessAudioAndEffects(uint8_t *data, UINT size) {
+    int numSamples = size / 4; // Assuming 16-bit stereo data
+    int16_t *pcmData = (int16_t *)data;
+    static float l_buf_in[BLOCK_SIZE_FLOAT];
+    static float r_buf_in[BLOCK_SIZE_FLOAT];
+    static float l_buf_out[BLOCK_SIZE_FLOAT];
+    static float r_buf_out[BLOCK_SIZE_FLOAT];
+
+    // Convert 16-bit PCM to float
+    for (int i = 0; i < numSamples; i += 2) {
+        l_buf_in[i / 2] = (float)pcmData[i] / 32768.0f;
+        r_buf_in[i / 2] = (float)pcmData[i + 1] / 32768.0f;
+    }
+
+    // Reset output buffers
+    memset(l_buf_out, 0, sizeof(l_buf_out));
+    memset(r_buf_out, 0, sizeof(r_buf_out));
+
+    // Apply effects based on flags
+    if (useLPF) {
+        Process_LPF(l_buf_in, l_buf_out, numSamples / 2);
+        Process_LPF(r_buf_in, r_buf_out, numSamples / 2);
+    }
     if (useHPF) {
-        Process_HPF(l_buf_in, l_buf_out, BLOCK_SIZE_FLOAT);
-        // Process right channel if needed
+        Process_HPF(l_buf_in, l_buf_out, numSamples / 2);
+        Process_HPF(r_buf_in, r_buf_out, numSamples / 2);
+    }
+    if (useReverb) {
+        for (int i = 0; i < numSamples / 2; i++) {
+            l_buf_out[i] = ApplyReverb(l_buf_in[i]);
+            r_buf_out[i] = ApplyReverb(r_buf_in[i]);
+        }
+    }
+    if (useGainUp) {
+        for (int i = 0; i < numSamples / 2; i++) {
+            l_buf_out[i] = ApplyGain(l_buf_out[i], gainFactorUp);
+            r_buf_out[i] = ApplyGain(r_buf_out[i], gainFactorUp);
+        }
+    }
+    if (useGainDown) {
+        for (int i = 0; i < numSamples / 2; i++) {
+            l_buf_out[i] = ApplyGain(l_buf_out[i], gainFactorDown);
+            r_buf_out[i] = ApplyGain(r_buf_out[i], gainFactorDown);
+        }
     }
     if (useDistortion) {
-        for (int i = 0; i < BLOCK_SIZE_FLOAT; ++i) {
+        for (int i = 0; i < numSamples / 2; i++) {
             l_buf_out[i] = Do_Distortion(l_buf_in[i]);
+            r_buf_out[i] = Do_Distortion(r_buf_in[i]);
         }
     }
 
-    // Apply gain down if enabled
-    if (useGainDown) {
-        for (int i = 0; i < BLOCK_SIZE_FLOAT; ++i) {
-            l_buf_out[i] = ApplyGain(l_buf_out[i], gainFactorDown);
-        }
+    // Convert float back to 16-bit PCM
+    for (int i = 0; i < numSamples; i += 2) {
+        pcmData[i] = (int16_t)(l_buf_out[i / 2] * 32767.0f);
+        pcmData[i + 1] = (int16_t)(r_buf_out[i / 2] * 32767.0f);
     }
-    // Apply gain up if enabled
-    if (useGainUp) {
-        for (int i = 0; i < BLOCK_SIZE_FLOAT; ++i) {
-            l_buf_out[i] = ApplyGain(l_buf_out[i], gainFactorUp);
-        }
-    }
-    // Apply reverb effect if enabled
-    if (useReverb) {
-        for (int i = 0; i < BLOCK_SIZE_FLOAT; ++i) {
-            l_buf_out[i] = ApplyReverb(l_buf_out[i]);
-        }
-    }
-
-    // Logic to convert l_buf_out (and r_buf_out) back to txBuf format goes here
 }
+
+
+void EXTI0_IRQHandler(void) {
+    HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_0); // Handle EXTI line 0 interrupt
+}
+
+void EXTI1_IRQHandler(void) {
+    HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_1); // Handle EXTI line 1 interrupt
+}
+
+void EXTI2_IRQHandler(void) {
+    HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_2); // Handle EXTI line 2 interrupt
+}
+
+// Callback function called by HAL_GPIO_EXTI_IRQHandler
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
+    ReadGesture(); // Process the gesture
+}
+
 
 void SystemClock_Config(void)
 {
@@ -322,34 +447,8 @@ void SystemClock_Config(void)
   * @param None
   * @retval None
   */
-static void MX_I2C2_Init(void)
-{
 
-  /* USER CODE BEGIN I2C2_Init 0 */
 
-  /* USER CODE END I2C2_Init 0 */
-
-  /* USER CODE BEGIN I2C2_Init 1 */
-
-  /* USER CODE END I2C2_Init 1 */
-  hi2c2.Instance = I2C2;
-  hi2c2.Init.ClockSpeed = 100000;
-  hi2c2.Init.DutyCycle = I2C_DUTYCYCLE_2;
-  hi2c2.Init.OwnAddress1 = 0;
-  hi2c2.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
-  hi2c2.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
-  hi2c2.Init.OwnAddress2 = 0;
-  hi2c2.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
-  hi2c2.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
-  if (HAL_I2C_Init(&hi2c2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN I2C2_Init 2 */
-
-  /* USER CODE END I2C2_Init 2 */
-
-}
 
 /**
   * @brief I2S2 Initialization Function
@@ -404,6 +503,52 @@ static void MX_DMA_Init(void)
 
 }
 
+
+
+void MX_SDIO_SD_Init(void)
+{
+    // Initialize SDIO peripheral
+    hsd.Instance = SDIO;
+    hsd.Init.ClockEdge = SDIO_CLOCK_EDGE_RISING;
+    hsd.Init.ClockBypass = SDIO_CLOCK_BYPASS_DISABLE;
+    hsd.Init.ClockPowerSave = SDIO_CLOCK_POWER_SAVE_DISABLE;
+    hsd.Init.BusWide = SDIO_BUS_WIDE_1B;
+    hsd.Init.HardwareFlowControl = SDIO_HARDWARE_FLOW_CONTROL_DISABLE;
+    hsd.Init.ClockDiv = SDIO_TRANSFER_CLK_DIV; // Set according to your clock configuration needs
+
+    // Initialize the SD card
+    if (HAL_SD_Init(&hsd) != HAL_OK)
+    {
+        Error_Handler();
+    }
+
+    // Configure the SD Bus width (1 bit or 4 bits)
+    if (HAL_SD_ConfigWideBusOperation(&hsd, SDIO_BUS_WIDE_4B) != HAL_OK)
+    {
+        Error_Handler();
+    }
+
+    // Get Card Info
+    HAL_SD_GetCardInfo(&hsd, &SDCardInfo);
+}
+
+
+
+void MX_FATFS_Init(void) {
+    // Link the SD card driver
+    if(FATFS_LinkDriver(&SD_Driver, SDPath) == 0) {
+        // Mount the file system
+        if(f_mount(&SDFatFs, (TCHAR const*)SDPath, 0) != FR_OK) {
+            // Error handling
+            Error_Handler();
+        }
+    } else {
+        // Driver linking error handling
+        Error_Handler();
+    }
+}
+
+
 /**
   * @brief GPIO Initialization Function
   * @param None
@@ -411,29 +556,40 @@ static void MX_DMA_Init(void)
   */
 static void MX_GPIO_Init(void)
 {
-  GPIO_InitTypeDef GPIO_InitStruct = {0};
-/* USER CODE BEGIN MX_GPIO_Init_1 */
-/* USER CODE END MX_GPIO_Init_1 */
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
 
-  /* GPIO Ports Clock Enable */
-  __HAL_RCC_GPIOH_CLK_ENABLE();
-  __HAL_RCC_GPIOC_CLK_ENABLE();
-  __HAL_RCC_GPIOB_CLK_ENABLE();
-  __HAL_RCC_GPIOA_CLK_ENABLE();
+    /* GPIO Ports Clock Enable */
+    __HAL_RCC_GPIOH_CLK_ENABLE();
+    __HAL_RCC_GPIOC_CLK_ENABLE();
+    __HAL_RCC_GPIOB_CLK_ENABLE();
+    __HAL_RCC_GPIOA_CLK_ENABLE(); // Ensure GPIO port A's clock is enabled
+//
+//    /*Configure GPIO pin Output Level */
+//    HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
+//
+//    /*Configure GPIO pin : LED_Pin */
+//    GPIO_InitStruct.Pin = LED_Pin;
+//    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+//    GPIO_InitStruct.Pull = GPIO_NOPULL;
+//    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+//    HAL_GPIO_Init(LED_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
+    // Additional code for configuring GPIOA pins as input
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+    GPIO_InitStruct.Pin = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2;
+    GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING_FALLING; // Interrupt Mode
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : LED_Pin */
-  GPIO_InitStruct.Pin = LED_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(LED_GPIO_Port, &GPIO_InitStruct);
-
-/* USER CODE BEGIN MX_GPIO_Init_2 */
-/* USER CODE END MX_GPIO_Init_2 */
+    // Enable and set EXTI Line[0:2] Interrupt to the given priority
+    HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(EXTI0_IRQn);
+    HAL_NVIC_SetPriority(EXTI1_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(EXTI1_IRQn);
+    HAL_NVIC_SetPriority(EXTI2_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(EXTI2_IRQn);
 }
+
 
 /* USER CODE BEGIN 4 */
 
