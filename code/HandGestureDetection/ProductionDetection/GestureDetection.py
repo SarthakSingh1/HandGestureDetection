@@ -12,6 +12,8 @@ GPIO.setwarnings(False)
 bit_1 = 17
 bit_2 = 27
 bit_3 = 22
+button_pin = 4;
+
 
 bit_1_value = 0
 bit_2_value = 0
@@ -22,7 +24,7 @@ GPIO.setup(bit_2, GPIO.OUT)
 GPIO.setup(bit_3, GPIO.OUT)
 
 GPIO.setup(
-    5, GPIO.IN, pull_up_down=GPIO.PUD_DOWN
+    button_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP
 )  # Set pin 10 to be an input pin and set initial value to be pulled low (off)
 
 running = True
@@ -51,14 +53,14 @@ time.sleep(1)
 set_gpio(0)  
 
 
-def button_callback():
+def button_callback(channel):
     global running
     print("Button was pushed, shutting down code")
     running = False
 
 
 GPIO.add_event_detect(
-    10, GPIO.RISING, callback=button_callback
+    button_pin, GPIO.FALLING, callback=button_callback, bouncetime=300
 )  # Setup event on pin 10 rising edge
 
 
