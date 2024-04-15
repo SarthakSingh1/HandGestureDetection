@@ -21,6 +21,12 @@ GPIO.setup(bit_1, GPIO.OUT)
 GPIO.setup(bit_2, GPIO.OUT)
 GPIO.setup(bit_3, GPIO.OUT)
 
+GPIO.setup(
+    5, GPIO.IN, pull_up_down=GPIO.PUD_DOWN
+)  # Set pin 10 to be an input pin and set initial value to be pulled low (off)
+
+running = True
+
 
 def set_gpio(number):
     global bit_1_value, bit_2_value, bit_3_value
@@ -37,8 +43,24 @@ def set_gpio(number):
         GPIO.output(bit_2, bit_2_value)
         GPIO.output(bit_3, bit_3_value)
 
+# display 7, 6, 0 to show the code has started 
+set_gpio(7)  
+time.sleep(1)
+set_gpio(6)  
+time.sleep(1)
+set_gpio(0)  
 
-set_gpio(0)
+
+def button_callback():
+    global running
+    print("Button was pushed, shutting down code")
+    running = False
+
+
+GPIO.add_event_detect(
+    10, GPIO.RISING, callback=button_callback
+)  # Setup event on pin 10 rising edge
+
 
 cameraCapture = cv2.VideoCapture(0)
 tips = [8, 12, 16, 20]  # 20 landmarks total and these are all the tip of each finger
@@ -75,8 +97,8 @@ curr_state = "Nothing"
 gpio_value = 0
 
 try:
-    while True:
-        try: 
+    while running:
+        try:
             ret, frame = cameraCapture.read()  # Gets a frame
             frame1 = cv2.resize(frame, (640, 480))
             a = findpostion(frame1)
@@ -122,4 +144,5 @@ try:
         print(f"Current state: {curr_state} current gpio: {gpio_value}")
 except KeyboardInterrupt:
     print("Running cleanup")
+finally:
     GPIO.cleanup()
