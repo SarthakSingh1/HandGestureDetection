@@ -60,7 +60,8 @@ sampling frequency: 48000 Hz
   actual attenuation = -32.02295267957132 dB
 
 */
-
+#define DRIVE 10.0f //distortion drive
+#define WET 0.5f  //mix ratio of processed and original for distortion
 #define FILTER_TAP_NUM 17
 #define BLOCK_SIZE_FLOAT 512
 #define BLOCK_SIZE_U16 2048
@@ -150,23 +151,19 @@ float ApplyReverb(float inputSample) {
 }
 
 
-float Do_Distortion (float insample) {
+void applySoftClipping(float* input, float* output, uint32_t numSamples) {
+    for (uint32_t i = 0; i < numSamples; i++) {
+        float sample = input[i];
 
-	float threshold_noise = 2000000.0f;
+        // Apply drive
+        sample *= drive;
 
+        // Soft clipping using tanh function for smoother transitions
+        sample = arm_tanh_f32(sample);  // Using CMSIS-DSP for efficient computation
 
-	float threshold_lower = 10000000.0f;
-	float gain_lower = 2.0f;
-
-	float threshold_higher = 60000000.0f;
-	float gain_higher = 0.5f;
-
-	float outgain = 2.0f;
-
-
-	if (fabs(insample) < threshold_lower && fabs(insample) > threshold_noise ) return outgain*(insample*gain_lower);
-	if (fabs(insample) > threshold_higher) return outgain*(insample*gain_higher);
-	return outgain*insample;
+        // Mix the original (dry) and distorted (wet) signals
+        output[i] = sample * wet + input[i] * (1.0f - wet);
+    }
 }
 
 int main(void)
@@ -370,8 +367,8 @@ void ProcessAudioAndEffects(uint8_t *data, UINT size) {
     }
     if (useDistortion) {
         for (int i = 0; i < numSamples / 2; i++) {
-            l_buf_out[i] = Do_Distortion(l_buf_in[i]);
-            r_buf_out[i] = Do_Distortion(r_buf_in[i]);
+            l_buf_out[i] = applySoftClipping(l_buf_in[i]);
+            r_buf_out[i] = applySoftClipping(r_buf_in[i]);
         }
     }
 
