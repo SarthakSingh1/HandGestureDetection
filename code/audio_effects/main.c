@@ -18,48 +18,39 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "usb_device.h"
 #include "arm_math.h"  // Include CMSIS-DSP header
 #include <math.h>
 #include "fatfs.h"  //audio stuff
-#include "stm32f4xx_hal.h" //for sd card stuff
+#include "stm32h7xx_hal.h" //for sd card stuff
 #include <math.h> //for mathematical operations
-/* Private variables ---------------------------------------------------------*/
 
 
-I2S_HandleTypeDef hi2s2;
+I2C_HandleTypeDef hi2s2;
 DMA_HandleTypeDef hdma_spi2_tx;
 DMA_HandleTypeDef hdma_i2s2_ext_rx;
 
-
-
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
+static void MPU_Config(void);
 static void MX_GPIO_Init(void);
-static void MX_DMA_Init(void);
-static void MX_I2C2_Init(void);
-static void MX_I2S2_Init(void);
-static void MX_SDIO_SD_Init(void);
+static void MX_DAC1_Init(void);
+static void MX_I2C1_Init(void);
+static void MX_SPI4_Init(void);
 
 
-/*
+DAC_HandleTypeDef hdac1; //We have to declare these for some reason
+I2C_HandleTypeDef hi2c1;
+SPI_HandleTypeDef hspi4;
 
-FIR filter designed with
-http://t-filter.appspot.com
+/* Private user code ---------------------------------------------------------*/
+/* USER CODE BEGIN 0 */
 
-sampling frequency: 48000 Hz
+/* USER CODE END 0 */
 
-* 0 Hz - 2000 Hz
-  gain = 1
-  desired ripple = 5 dB
-  actual ripple = 3.284632065621469 dB
-
-* 5000 Hz - 24000 Hz
-  gain = 0
-  desired attenuation = -30 dB
-  actual attenuation = -32.02295267957132 dB
-
-*/
+/**
+  * @brief  The application entry point.
+  * @retval int
+  */
 #define DRIVE 10.0f //distortion drive
 #define WET 0.5f  //mix ratio of processed and original for distortion
 #define FILTER_TAP_NUM 17
@@ -106,8 +97,8 @@ uint8_t useLPF = 0; // Control flag for low-pass filter effect
 uint8_t useHPF = 0; // Control flag for high-pass filter effect
 uint8_t useDistortion = 0;
 
-SD_HandleTypeDef hsd;
-HAL_SD_CardInfoTypedef SDCardInfo;
+SPI_HandleTypeDef hsd;
+HAL_SD_CardCIDTypedef SDCardInfo;
 FATFS SDFatFs;  // File system object for SD card logical drive
 FIL MyFile;     // File object
 char SDPath[4]; // SD card logical drive path
@@ -120,9 +111,7 @@ float l_buf_out [BLOCK_SIZE_FLOAT*2];
 float r_buf_out [BLOCK_SIZE_FLOAT*2];
 
 
-static float firData[FILTER_TAP_NUM];
-static int firPtr[FILTER_TAP_NUM];
-static int firWPtr = 0;
+
 int reverbWriteIndex = 0;
 
 
@@ -151,21 +140,15 @@ float ApplyReverb(float inputSample) {
 }
 
 
-void applySoftClipping(float* input, float* output, uint32_t numSamples) {
-    for (uint32_t i = 0; i < numSamples; i++) {
-        float sample = input[i];
-
-        // Apply drive
-        sample *= drive;
-
-        // Soft clipping using tanh function for smoother transitions
-        sample = arm_tanh_f32(sample);  // Using CMSIS-DSP for efficient computation
-
-        // Mix the original (dry) and distorted (wet) signals
-        output[i] = sample * wet + input[i] * (1.0f - wet);
+float applySoftClipping(float sample) {
+    float threshold = 0.8f;  // Clipping threshold
+    if (sample > threshold) {
+        sample = threshold + (sample - threshold) / 3;
+    } else if (sample < -threshold) {
+        sample = -threshold + (sample + threshold) / 3;
     }
+    return sample;
 }
-
 int main(void)
 {
 
@@ -178,14 +161,9 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_DMA_Init();
-  MX_I2C2_Init();
-  MX_I2S2_Init();
-  MX_USB_DEVICE_Init();
-  MX_I2C2_Init();
+  MX_I2C1_Init();
 
 
-  HAL_I2SEx_TransmitReceive_DMA (&hi2s2, txBuf, rxBuf, 4);
 
 
   while (1)
@@ -226,12 +204,12 @@ void Process_HPF(float* input, float* output, int blockSize) {
   * @retval None
   */
 
-void HAL_I2SEx_TxRxHalfCpltCallback(I2S_HandleTypeDef *hi2s) {
+void HAL_I2SEx_TxRxHalfCpltCallback(I2C_HandleTypeDef *hi2s) {
     callback_state = 1; // Indicate half transfer complete
     ProcessAudioEffects(); // Function to decide and call the appropriate effect
 }
 
-void HAL_I2SEx_TxRxCpltCallback(I2S_HandleTypeDef *hi2s) {
+void HAL_I2SEx_TxRxCpltCallback(I2C_HandleTypeDef *hi2s) {
     callback_state = 2; // Indicate full transfer complete
     ProcessAudioEffects(); // Function to decide and call the appropriate effect
 }
@@ -380,45 +358,28 @@ void ProcessAudioAndEffects(uint8_t *data, UINT size) {
 }
 
 
-void EXTI0_IRQHandler(void) {
-    HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_0); // Handle EXTI line 0 interrupt
-}
-
-void EXTI1_IRQHandler(void) {
-    HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_1); // Handle EXTI line 1 interrupt
-}
-
-void EXTI2_IRQHandler(void) {
-    HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_2); // Handle EXTI line 2 interrupt
-}
-
-// Callback function called by HAL_GPIO_EXTI_IRQHandler
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
-    ReadGesture(); // Process the gesture
-}
-
-
 void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
 
+  /** Supply configuration update enable
+  */
+  HAL_PWREx_ConfigSupply(PWR_LDO_SUPPLY);
+
   /** Configure the main internal regulator output voltage
   */
-  __HAL_RCC_PWR_CLK_ENABLE();
-  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
+  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE3);
+
+  while(!__HAL_PWR_GET_FLAG(PWR_FLAG_VOSRDY)) {}
 
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
-  RCC_OscInitStruct.HSEState = RCC_HSE_BYPASS;
-  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-  RCC_OscInitStruct.PLL.PLLM = 8;
-  RCC_OscInitStruct.PLL.PLLN = 168;
-  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
-  RCC_OscInitStruct.PLL.PLLQ = 7;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
+  RCC_OscInitStruct.HSIState = RCC_HSI_DIV1;
+  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     Error_Handler();
@@ -427,124 +388,160 @@ void SystemClock_Config(void)
   /** Initializes the CPU, AHB and APB buses clocks
   */
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
-                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
-  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;
-  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV2;
+                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2
+                              |RCC_CLOCKTYPE_D3PCLK1|RCC_CLOCKTYPE_D1PCLK1;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI;
+  RCC_ClkInitStruct.SYSCLKDivider = RCC_SYSCLK_DIV1;
+  RCC_ClkInitStruct.AHBCLKDivider = RCC_HCLK_DIV1;
+  RCC_ClkInitStruct.APB3CLKDivider = RCC_APB3_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_APB1_DIV2;
+  RCC_ClkInitStruct.APB2CLKDivider = RCC_APB2_DIV2;
+  RCC_ClkInitStruct.APB4CLKDivider = RCC_APB4_DIV1;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_5) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_1) != HAL_OK)
   {
     Error_Handler();
   }
 }
 
 /**
-  * @brief I2C2 Initialization Function
+  * @brief DAC1 Initialization Function
   * @param None
   * @retval None
   */
-
-
-
-/**
-  * @brief I2S2 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_I2S2_Init(void)
+static void MX_DAC1_Init(void)
 {
 
-  /* USER CODE BEGIN I2S2_Init 0 */
+  /* USER CODE BEGIN DAC1_Init 0 */
 
-  /* USER CODE END I2S2_Init 0 */
+  /* USER CODE END DAC1_Init 0 */
 
-  /* USER CODE BEGIN I2S2_Init 1 */
+  DAC_ChannelConfTypeDef sConfig = {0};
 
-  /* USER CODE END I2S2_Init 1 */
-  hi2s2.Instance = SPI2;
-  hi2s2.Init.Mode = I2S_MODE_MASTER_TX;
-  hi2s2.Init.Standard = I2S_STANDARD_PHILIPS;
-  hi2s2.Init.DataFormat = I2S_DATAFORMAT_16B;
-  hi2s2.Init.MCLKOutput = I2S_MCLKOUTPUT_ENABLE;
-  hi2s2.Init.AudioFreq = I2S_AUDIOFREQ_48K;
-  hi2s2.Init.CPOL = I2S_CPOL_LOW;
-  hi2s2.Init.ClockSource = I2S_CLOCK_PLL;
-  hi2s2.Init.FullDuplexMode = I2S_FULLDUPLEXMODE_ENABLE;
-  if (HAL_I2S_Init(&hi2s2) != HAL_OK)
+  /* USER CODE BEGIN DAC1_Init 1 */
+
+  /* USER CODE END DAC1_Init 1 */
+
+  /** DAC Initialization
+  */
+  hdac1.Instance = DAC1;
+  if (HAL_DAC_Init(&hdac1) != HAL_OK)
   {
     Error_Handler();
   }
-  /* USER CODE BEGIN I2S2_Init 2 */
 
-  /* USER CODE END I2S2_Init 2 */
+  /** DAC channel OUT1 config
+  */
+  sConfig.DAC_SampleAndHold = DAC_SAMPLEANDHOLD_DISABLE;
+  sConfig.DAC_Trigger = DAC_TRIGGER_NONE;
+  sConfig.DAC_OutputBuffer = DAC_OUTPUTBUFFER_ENABLE;
+  sConfig.DAC_ConnectOnChipPeripheral = DAC_CHIPCONNECT_DISABLE;
+  sConfig.DAC_UserTrimming = DAC_TRIMMING_FACTORY;
+  if (HAL_DAC_ConfigChannel(&hdac1, &sConfig, DAC_CHANNEL_1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN DAC1_Init 2 */
+
+  /* USER CODE END DAC1_Init 2 */
 
 }
 
 /**
-  * Enable DMA controller clock
+  * @brief I2C1 Initialization Function
+  * @param None
+  * @retval None
   */
-static void MX_DMA_Init(void)
+static void MX_I2C1_Init(void)
 {
 
-  /* DMA controller clock enable */
-  __HAL_RCC_DMA1_CLK_ENABLE();
+  /* USER CODE BEGIN I2C1_Init 0 */
 
-  /* DMA interrupt init */
-  /* DMA1_Stream3_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Stream3_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Stream3_IRQn);
-  /* DMA1_Stream4_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Stream4_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Stream4_IRQn);
+  /* USER CODE END I2C1_Init 0 */
+
+  /* USER CODE BEGIN I2C1_Init 1 */
+
+  /* USER CODE END I2C1_Init 1 */
+  hi2c1.Instance = I2C1;
+  hi2c1.Init.Timing = 0x00707CBB;
+  hi2c1.Init.OwnAddress1 = 0;
+  hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+  hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+  hi2c1.Init.OwnAddress2 = 0;
+  hi2c1.Init.OwnAddress2Masks = I2C_OA2_NOMASK;
+  hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+  hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+  if (HAL_I2C_Init(&hi2c1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Analog filter
+  */
+  if (HAL_I2CEx_ConfigAnalogFilter(&hi2c1, I2C_ANALOGFILTER_ENABLE) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Digital filter
+  */
+  if (HAL_I2CEx_ConfigDigitalFilter(&hi2c1, 0) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN I2C1_Init 2 */
+
+  /* USER CODE END I2C1_Init 2 */
 
 }
 
-
-
-void MX_SDIO_SD_Init(void)
+/**
+  * @brief SPI4 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_SPI4_Init(void)
 {
-    // Initialize SDIO peripheral
-    hsd.Instance = SDIO;
-    hsd.Init.ClockEdge = SDIO_CLOCK_EDGE_RISING;
-    hsd.Init.ClockBypass = SDIO_CLOCK_BYPASS_DISABLE;
-    hsd.Init.ClockPowerSave = SDIO_CLOCK_POWER_SAVE_DISABLE;
-    hsd.Init.BusWide = SDIO_BUS_WIDE_1B;
-    hsd.Init.HardwareFlowControl = SDIO_HARDWARE_FLOW_CONTROL_DISABLE;
-    hsd.Init.ClockDiv = SDIO_TRANSFER_CLK_DIV; // Set according to your clock configuration needs
 
-    // Initialize the SD card
-    if (HAL_SD_Init(&hsd) != HAL_OK)
-    {
-        Error_Handler();
-    }
+  /* USER CODE BEGIN SPI4_Init 0 */
 
-    // Configure the SD Bus width (1 bit or 4 bits)
-    if (HAL_SD_ConfigWideBusOperation(&hsd, SDIO_BUS_WIDE_4B) != HAL_OK)
-    {
-        Error_Handler();
-    }
+  /* USER CODE END SPI4_Init 0 */
 
-    // Get Card Info
-    HAL_SD_GetCardInfo(&hsd, &SDCardInfo);
+  /* USER CODE BEGIN SPI4_Init 1 */
+
+  /* USER CODE END SPI4_Init 1 */
+  /* SPI4 parameter configuration*/
+  hspi4.Instance = SPI4;
+  hspi4.Init.Mode = SPI_MODE_MASTER;
+  hspi4.Init.Direction = SPI_DIRECTION_2LINES;
+  hspi4.Init.DataSize = SPI_DATASIZE_4BIT;
+  hspi4.Init.CLKPolarity = SPI_POLARITY_LOW;
+  hspi4.Init.CLKPhase = SPI_PHASE_1EDGE;
+  hspi4.Init.NSS = SPI_NSS_HARD_INPUT;
+  hspi4.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
+  hspi4.Init.FirstBit = SPI_FIRSTBIT_MSB;
+  hspi4.Init.TIMode = SPI_TIMODE_DISABLE;
+  hspi4.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
+  hspi4.Init.CRCPolynomial = 0x0;
+  hspi4.Init.NSSPMode = SPI_NSS_PULSE_ENABLE;
+  hspi4.Init.NSSPolarity = SPI_NSS_POLARITY_LOW;
+  hspi4.Init.FifoThreshold = SPI_FIFO_THRESHOLD_01DATA;
+  hspi4.Init.TxCRCInitializationPattern = SPI_CRC_INITIALIZATION_ALL_ZERO_PATTERN;
+  hspi4.Init.RxCRCInitializationPattern = SPI_CRC_INITIALIZATION_ALL_ZERO_PATTERN;
+  hspi4.Init.MasterSSIdleness = SPI_MASTER_SS_IDLENESS_00CYCLE;
+  hspi4.Init.MasterInterDataIdleness = SPI_MASTER_INTERDATA_IDLENESS_00CYCLE;
+  hspi4.Init.MasterReceiverAutoSusp = SPI_MASTER_RX_AUTOSUSP_DISABLE;
+  hspi4.Init.MasterKeepIOState = SPI_MASTER_KEEP_IO_STATE_DISABLE;
+  hspi4.Init.IOSwap = SPI_IO_SWAP_DISABLE;
+  if (HAL_SPI_Init(&hspi4) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN SPI4_Init 2 */
+
+  /* USER CODE END SPI4_Init 2 */
+
 }
-
-
-
-void MX_FATFS_Init(void) {
-    // Link the SD card driver
-    if(FATFS_LinkDriver(&SD_Driver, SDPath) == 0) {
-        // Mount the file system
-        if(f_mount(&SDFatFs, (TCHAR const*)SDPath, 0) != FR_OK) {
-            // Error handling
-            Error_Handler();
-        }
-    } else {
-        // Driver linking error handling
-        Error_Handler();
-    }
-}
-
 
 /**
   * @brief GPIO Initialization Function
@@ -553,44 +550,65 @@ void MX_FATFS_Init(void) {
   */
 static void MX_GPIO_Init(void)
 {
-    GPIO_InitTypeDef GPIO_InitStruct = {0};
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+/* USER CODE BEGIN MX_GPIO_Init_1 */
+/* USER CODE END MX_GPIO_Init_1 */
 
-    /* GPIO Ports Clock Enable */
-    __HAL_RCC_GPIOH_CLK_ENABLE();
-    __HAL_RCC_GPIOC_CLK_ENABLE();
-    __HAL_RCC_GPIOB_CLK_ENABLE();
-    __HAL_RCC_GPIOA_CLK_ENABLE(); // Ensure GPIO port A's clock is enabled
-//
-//    /*Configure GPIO pin Output Level */
-//    HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
-//
-//    /*Configure GPIO pin : LED_Pin */
-//    GPIO_InitStruct.Pin = LED_Pin;
-//    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-//    GPIO_InitStruct.Pull = GPIO_NOPULL;
-//    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-//    HAL_GPIO_Init(LED_GPIO_Port, &GPIO_InitStruct);
+  /* GPIO Ports Clock Enable */
+  __HAL_RCC_GPIOH_CLK_ENABLE();
+  __HAL_RCC_GPIOA_CLK_ENABLE();
+  __HAL_RCC_GPIOE_CLK_ENABLE();
+  __HAL_RCC_GPIOD_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
 
-    // Additional code for configuring GPIOA pins as input
-    __HAL_RCC_GPIOA_CLK_ENABLE();
-    GPIO_InitStruct.Pin = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2;
-    GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING_FALLING; // Interrupt Mode
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
-    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  /*Configure GPIO pin : CARD_DET_Pin */
+  GPIO_InitStruct.Pin = CARD_DET_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(CARD_DET_GPIO_Port, &GPIO_InitStruct);
 
-    // Enable and set EXTI Line[0:2] Interrupt to the given priority
-    HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0);
-    HAL_NVIC_EnableIRQ(EXTI0_IRQn);
-    HAL_NVIC_SetPriority(EXTI1_IRQn, 0, 0);
-    HAL_NVIC_EnableIRQ(EXTI1_IRQn);
-    HAL_NVIC_SetPriority(EXTI2_IRQn, 0, 0);
-    HAL_NVIC_EnableIRQ(EXTI2_IRQn);
+  /*Configure GPIO pins : STATE2_Pin STATE1_Pin STATE0_Pin */
+  GPIO_InitStruct.Pin = STATE2_Pin|STATE1_Pin|STATE0_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+
+/* USER CODE BEGIN MX_GPIO_Init_2 */
+/* USER CODE END MX_GPIO_Init_2 */
 }
-
 
 /* USER CODE BEGIN 4 */
 
 /* USER CODE END 4 */
+
+/* MPU Configuration */
+
+void MPU_Config(void)
+{
+  MPU_Region_InitTypeDef MPU_InitStruct = {0};
+
+  /* Disables the MPU */
+  HAL_MPU_Disable();
+
+  /** Initializes and configures the Region and the memory to be protected
+  */
+  MPU_InitStruct.Enable = MPU_REGION_ENABLE;
+  MPU_InitStruct.Number = MPU_REGION_NUMBER0;
+  MPU_InitStruct.BaseAddress = 0x0;
+  MPU_InitStruct.Size = MPU_REGION_SIZE_4GB;
+  MPU_InitStruct.SubRegionDisable = 0x87;
+  MPU_InitStruct.TypeExtField = MPU_TEX_LEVEL0;
+  MPU_InitStruct.AccessPermission = MPU_REGION_NO_ACCESS;
+  MPU_InitStruct.DisableExec = MPU_INSTRUCTION_ACCESS_DISABLE;
+  MPU_InitStruct.IsShareable = MPU_ACCESS_SHAREABLE;
+  MPU_InitStruct.IsCacheable = MPU_ACCESS_NOT_CACHEABLE;
+  MPU_InitStruct.IsBufferable = MPU_ACCESS_NOT_BUFFERABLE;
+
+  HAL_MPU_ConfigRegion(&MPU_InitStruct);
+  /* Enables the MPU */
+  HAL_MPU_Enable(MPU_PRIVILEGED_DEFAULT);
+
+}
 
 /**
   * @brief  This function is executed in case of error occurrence.
