@@ -86,7 +86,7 @@ Got initial vision for the 3d models was completed. The camera was put on the to
 ![Upper First draft](/notebooks/sarthak/OriginalTopVision.png)
 
 # 2024-04-09
-After discussion with the team, there were a few issues with the design. The first was that it would take too long to print and was too large to fit on the bed of the printer. Also the camera cable is not long enough to make it to the top of this box. Also an important realization is that we only need one side of the top so we make changed to the design. 
+After discussion with the team, there were a few issues with the design. The first was that it would take too long to print and was too large to fit on the bed of the printer. Also the camera cable is not long enough to make it to the top of this box. Also an important realization is that we only need one side of the top so we make changed to the design. Also ordered fillament for 3d printing the rest of our materials 
 
 ![Bottom Final draft](/notebooks/sarthak/finalBottom.png)
 ![Upper Final draft](/notebooks/sarthak/finalTop.png)
@@ -99,3 +99,10 @@ GPIO was completed and tested on a breadboard. We used LED's to show that the co
 
 ![Pi Connection](/notebooks/sarthak/raspberryPi.jpg)
 ![Upper Final draft](/notebooks/sarthak/breadboard.jpg)
+
+You can see there is also a pus button which terminates our code. That is just used for when power goes out, we want the program to not be running to prvent disk access when shutting down 
+
+Furthermore, I made it so the code begins on startup instead of me needing to manually connect to a monitor and run the code. 
+
+# 2024-04-18
+Small edits needed to made to the 3d model and they need to be printed. Main issue was the hols were too big so I needed to re design them and re print. I am currently waiting to 3d print the final enclosure. 
