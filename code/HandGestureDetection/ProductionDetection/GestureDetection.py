@@ -12,7 +12,7 @@ GPIO.setwarnings(False)
 bit_1 = 17
 bit_2 = 27
 bit_3 = 22
-button_pin = 4;
+button_pin = 4
 
 
 bit_1_value = 0

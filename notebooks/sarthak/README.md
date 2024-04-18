@@ -27,7 +27,7 @@ Was able to install the binary by cross compiling on my mac and loading it onto 
 # 2024-03-20
 We got out feedback for our design document and made the relevant changes to re submit it for more points. Furthermore, I was able get the X and Y coordinate of joints on the hand to print to the console. I devised an algorithm for figuring out if a finger is up or down. 
 
-![See hand landmarks here](~/notebooks/sarthak/HandLandmarks.png)
+![See hand landmarks here](/notebooks/sarthak/HandLandmarks.png)
 
 The top joint on each hand and 2 joints under are going to have a comparison done on them. Whichever one is closer to the top of the screen will indicate if a hand is up or down. 
 
