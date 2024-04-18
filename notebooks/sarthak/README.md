@@ -27,14 +27,14 @@ Was able to install the binary by cross compiling on my mac and loading it onto 
 # 2024-03-20
 We got out feedback for our design document and made the relevant changes to re submit it for more points. Furthermore, I was able get the X and Y coordinate of joints on the hand to print to the console. I devised an algorithm for figuring out if a finger is up or down. 
 
-![See hand landmarks here](/HandLandMarks.png)
+![See hand landmarks here](~/notebooks/sarthak/HandLandmarks.png)
 
 The top joint on each hand and 2 joints under are going to have a comparison done on them. Whichever one is closer to the top of the screen will indicate if a hand is up or down. 
 
 # 2024-03-25
 I was able get an overlay on the screen to show the joins and detect if different joins are up or down. The thumb is buggy due to the difference in it and the other hands. Currently we are considering disregarding the thumb and using the other 4 fingers for our gesture. 
 
-![See hand overlay here](/HandGestureOverlay.png)
+![See hand overlay here](~/notebooks/sarthak/HandLandmarks.png)
 
 ```
 This many fingers are up -  5
@@ -52,3 +52,14 @@ This many fingers are up -  2
 ```
 
 As you can see I can for the most part detect properly. I am a bit unclear on how to handle the case with two hands so we are limited the scope of the project to a single hand within the view. 
+
+# 2024-04-01
+Began getting to work on the 3d model for our enclosure. The idea is that there will be a top and a bottom with the bottom containing the speaker and the camera while the top has the LCD. Also decided our final gestures and gave them coresponding GPIO values. Next step on hand gesture detection is to output to gpio and test using a breadboard. 
+
+# 2024-04-07
+Got initial vision for the 3d models was completed. The camera was put on the top part as that made more sense for 3d printing. We will discuss as a group and make edits to it for our project. 
+
+![Bottom First draft](~/notebooks/sarthak/OriginalBottomVision.png)
+![Upper First draft](~/notebooks/sarthak/OriginalTopVision.png)
+
+
