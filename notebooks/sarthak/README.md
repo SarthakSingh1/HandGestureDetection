@@ -56,10 +56,46 @@ As you can see I can for the most part detect properly. I am a bit unclear on ho
 # 2024-04-01
 Began getting to work on the 3d model for our enclosure. The idea is that there will be a top and a bottom with the bottom containing the speaker and the camera while the top has the LCD. Also decided our final gestures and gave them coresponding GPIO values. Next step on hand gesture detection is to output to gpio and test using a breadboard. 
 
+```
+fingers_name = ["Index", "Middle", "Ring", "Pinky"]
+
+gestures = {
+    "rock_roll": [1, 0, 0, 1],
+    "peace": [1, 1, 0, 0],
+    "index_up": [1, 0, 0, 0],
+    "all_fingers_up": [1, 1, 1, 1],
+    "pinky": [0, 0, 0, 1],
+    "closed_hand": [0, 0, 0, 0],
+}
+
+gestures_id = {
+    "rock_roll": 1,
+    "peace": 2,
+    "index_up": 3,
+    "all_fingers_up": 4,
+    "pinky": 5,
+    "closed_hand": 0,
+}
+```
+
+
 # 2024-04-07
 Got initial vision for the 3d models was completed. The camera was put on the top part as that made more sense for 3d printing. We will discuss as a group and make edits to it for our project. 
 
 ![Bottom First draft](/notebooks/sarthak/OriginalBottomVision.png)
 ![Upper First draft](/notebooks/sarthak/OriginalTopVision.png)
 
+# 2024-04-09
+After discussion with the team, there were a few issues with the design. The first was that it would take too long to print and was too large to fit on the bed of the printer. Also the camera cable is not long enough to make it to the top of this box. Also an important realization is that we only need one side of the top so we make changed to the design. 
 
+![Bottom Final draft](/notebooks/sarthak/finalBottom.png)
+![Upper Final draft](/notebooks/sarthak/finalTop.png)
+
+
+
+# 2024-04-15
+GPIO was completed and tested on a breadboard. We used LED's to show that the correct signals are showing up when the proper gesture is being done. See Below
+
+
+![Pi Connection](/notebooks/sarthak/raspberryPi.jpg)
+![Upper Final draft](/notebooks/sarthak/breadboard.jpg)
