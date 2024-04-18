@@ -34,7 +34,7 @@ The top joint on each hand and 2 joints under are going to have a comparison don
 # 2024-03-25
 I was able get an overlay on the screen to show the joins and detect if different joins are up or down. The thumb is buggy due to the difference in it and the other hands. Currently we are considering disregarding the thumb and using the other 4 fingers for our gesture. 
 
-![See hand overlay here](~/notebooks/sarthak/HandLandmarks.png)
+![See hand overlay here](/notebooks/sarthak/HandLandmarks.png)
 
 ```
 This many fingers are up -  5
@@ -59,7 +59,7 @@ Began getting to work on the 3d model for our enclosure. The idea is that there 
 # 2024-04-07
 Got initial vision for the 3d models was completed. The camera was put on the top part as that made more sense for 3d printing. We will discuss as a group and make edits to it for our project. 
 
-![Bottom First draft](~/notebooks/sarthak/OriginalBottomVision.png)
-![Upper First draft](~/notebooks/sarthak/OriginalTopVision.png)
+![Bottom First draft](/notebooks/sarthak/OriginalBottomVision.png)
+![Upper First draft](/notebooks/sarthak/OriginalTopVision.png)
 
 
