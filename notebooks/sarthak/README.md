@@ -34,7 +34,7 @@ The top joint on each hand and 2 joints under are going to have a comparison don
 # 2024-03-25
 I was able get an overlay on the screen to show the joins and detect if different joins are up or down. The thumb is buggy due to the difference in it and the other hands. Currently we are considering disregarding the thumb and using the other 4 fingers for our gesture. 
 
-![See hand overlay here](/notebooks/sarthak/HandLandmarks.png)
+![See hand overlay here](/notebooks/sarthak/HandGestureOverlay.png)
 
 ```
 This many fingers are up -  5
