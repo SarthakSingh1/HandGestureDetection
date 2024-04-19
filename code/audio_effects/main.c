@@ -162,17 +162,27 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_I2C1_Init();
+  MX_DAC1_Init();
+  
+  /* Mount the filesystem */
+    if (f_mount(&SDFatFs, SDPath, 1) == FR_OK) {
+        /* Open the audio file */
+        if (f_open(&MyFile, "audiofile.wav", FA_READ) == FR_OK) {
+            UINT br;  // Bytes read
+            while (!f_eof(&MyFile)) {
+                BYTE buffer[4096];  // Temporary buffer for audio data
+                if (f_read(&MyFile, buffer, sizeof(buffer), &br) == FR_OK) {
+                    ProcessAudioAndEffects(buffer, br);
+                }
+            }
+            f_close(&MyFile);
+        }
+        f_mount(NULL, SDPath, 1);  // Unmount the filesystem
+    }
 
-
-
-
-  while (1)
-  {
-      ReadGesture(); // Call this at regular intervals
-          // Other tasks...
-      HAL_Delay(100); // Delay for 100 ms
-  }
-
+    while (1) {
+        HAL_Delay(10);  // Main loop delay
+    }
 }
 
 
@@ -187,6 +197,16 @@ void Process_LPF(float* input, float* output, int blockSize) {
     }
 }
 
+void PlayRegularAudio(uint8_t *data, UINT size) {
+    int numSamples = size / 2; // Assuming 16-bit audio samples
+    uint16_t *samples = (uint16_t *)data;
+
+    // Output directly to DAC or whatever output method is being used
+    if (HAL_DAC_Start_DMA(&hdac1, DAC_CHANNEL_1, (uint32_t *)samples, numSamples, DAC_ALIGN_12B_R) != HAL_OK) {
+        // Handle possible error
+        Error_Handler();
+    }
+}
 
 void Process_HPF(float* input, float* output, int blockSize) {
     for (int n = 0; n < blockSize; ++n) {
@@ -235,6 +255,7 @@ void ReadGesture(void) {
                       (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1) << 1) | // Bit 1
                       HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_2);         // Bit 0
     // Reset all effects first
+    uint8_t useNothing = 0;  // Flag to bypass audio effects
     useLPF = 0;
     useHPF = 0;
     useGainUp = 0;
@@ -244,7 +265,8 @@ void ReadGesture(void) {
 
     switch(gesture) {
         case 0: // Closed Hand
-            // All effects off, already reset above
+        	useNothing = 1;
+        	
             break;
         case 1: // Rock & Roll
             useLPF = 1;
@@ -300,6 +322,7 @@ void ReadAudioFile() {
 
 void ProcessAudioAndEffects(uint8_t *data, UINT size) {
     int numSamples = size / 4; // Assuming 16-bit stereo data
+    int16_t *samples = (int16_t*)data;
     int16_t *pcmData = (int16_t *)data;
     static float l_buf_in[BLOCK_SIZE_FLOAT];
     static float r_buf_in[BLOCK_SIZE_FLOAT];
@@ -317,6 +340,10 @@ void ProcessAudioAndEffects(uint8_t *data, UINT size) {
     memset(r_buf_out, 0, sizeof(r_buf_out));
 
     // Apply effects based on flags
+    if (useNothing) {
+        PlayRegularAudio(data, size);  // Just output the audio without effects
+    }
+    
     if (useLPF) {
         Process_LPF(l_buf_in, l_buf_out, numSamples / 2);
         Process_LPF(r_buf_in, r_buf_out, numSamples / 2);
@@ -355,6 +382,8 @@ void ProcessAudioAndEffects(uint8_t *data, UINT size) {
         pcmData[i] = (int16_t)(l_buf_out[i / 2] * 32767.0f);
         pcmData[i + 1] = (int16_t)(r_buf_out[i / 2] * 32767.0f);
     }
+    // Output the processed (or unprocessed) audio
+    HAL_DAC_Start_DMA(&hdac1, DAC_CHANNEL_1, (uint32_t*)samples, numSamples, DAC_ALIGN_12B_R);
 }
 
 
