@@ -105,4 +105,12 @@ You can see there is also a pus button which terminates our code. That is just u
 Furthermore, I made it so the code begins on startup instead of me needing to manually connect to a monitor and run the code. 
 
 # 2024-04-18
-Small edits needed to made to the 3d model and they need to be printed. Main issue was the hols were too big so I needed to re design them and re print. I am currently waiting to 3d print the final enclosure. 
+The printed 3d model had a few issues after printing. The first were the distance between the camera holes were incorrect, and the soldered LCD within our breakout board is not flush with the backround. Also, the Pi and PCB did not fit into the mounting holes and those also need to be smaller. As of now we will work with the current 3d print and I will begin making small edits
+
+# 2024-04-18
+Small edits needed to made to the 3d model and they need to be printed. Main issue was the hols were too big so I needed to re design them and re print. I am currently waiting to 3d print the final enclosure. It should be done in 24 hours from now and then I will screw in all the components. 
+
+# 2024-04-19
+The parts are printed and now I need to screw the pieces on. THe holes for the camera were a bit small and I needed to use sandpaper to open up the hole a little bit. All the pieces ended up fitting. See below for the final print with parts screwed in. 
+
+![Upper Final draft](/notebooks/sarthak/finalEnclosure.jpeg)
