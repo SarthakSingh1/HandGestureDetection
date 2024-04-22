@@ -13,7 +13,7 @@ Design doc was finished and submitted today. Main design decision made from my e
 We gave our design presentation with main critiques being that we should make a decision between a pre tained model or our own for hand gesture detection. We found a package called mediapipe used by google which has a hand training model. The camera has arrived and I can begin testing
 
 # 2024-02-31
-I am dealing with a myriad of issues due to the low ram on the rasberry pi. Because of its limited compute, I cannot compile the binary of openCV - it takes well over 5 hours and then fails. I need to consider cross compiling or another alternative. I was able to test that the camera works as expected though. 
+I am dealing with a myriad of issues due to the low ram on the rasberry pi. Because of its limited compute, I cannot compile the binary of openCV - it takes well over 5 hours and then fails. I need to consider cross compiling or another alternative. I was able to test that the camera works as expected though. Using the command `raspiStill image.jpg` I can take a picture with the camera and it is fairly high quality. 
 
 # 2024-03-06
 We needed to order additional SMT development boards as they have run out. I was also unsucessful in being able to install openCV on the Pi and am considering purchasing a better Pi. I will continue to try to get this one to work until we have an estimate of the price of the other parts. I have also ordered a heat sink in hopes of improving the performance of the Pi
@@ -24,17 +24,47 @@ The team and I discussed the posibility of upgrading the PI within our budget. G
 # 2024-03-19
 Was able to install the binary by cross compiling on my mac and loading it onto the Pi. I was able to get a video feed going and run a simple openCV program. I can now start building the actual gesture detection. I have setup a folder in the github and am starting to push code. Also our audit passed today we were able to order our PCB
 
+
 # 2024-03-20
 We got out feedback for our design document and made the relevant changes to re submit it for more points. Furthermore, I was able get the X and Y coordinate of joints on the hand to print to the console. I devised an algorithm for figuring out if a finger is up or down. 
 
 ![See hand landmarks here](/notebooks/sarthak/HandLandmarks.png)
 
-The top joint on each hand and 2 joints under are going to have a comparison done on them. Whichever one is closer to the top of the screen will indicate if a hand is up or down. 
+The top joint on each hand and 2 joints under are going to have a comparison done on them. Whichever one is closer to the top of the screen will indicate if a finger is up or down. 
+
+# 2024-03-23
+I formally was able use the X Y coordinates to see if a hand was up or down using the following code 
+
+```
+            if len(a) > 0:
+                fingers = []
+
+                for id in range(0, 4):
+                    tip = a[tips[id]][2:]
+                    joint = a[joints[id]][2:]
+                    if tip < joint:
+                        fingers.append(1)
+                    else:
+                        fingers.append(0)
+
+                up, down = 0, 0
+                for i in range(4):
+                    value = fingers[i]
+                    if value:
+                        finger = "up"
+                        up += 1
+                    else:
+                        finger = "down"
+                        down += 1
+```
+
+The coordinates are the distance from the top and left of the screen which is why we use a less than sign rather than a greater than sigh for the tip < joint
+
 
 # 2024-03-25
 I was able get an overlay on the screen to show the joins and detect if different joins are up or down. The thumb is buggy due to the difference in it and the other hands. Currently we are considering disregarding the thumb and using the other 4 fingers for our gesture. 
 
-![See hand overlay here](/notebooks/sarthak/HandGestureOverlay.png)
+<img src="/notebooks/sarthak/HandGestureOverlay.png" alt="Hand Gesture Overlay" width="300">
 
 ```
 This many fingers are up -  5
