@@ -113,13 +113,13 @@ gestures_id = {
 Got initial vision for the 3d models was completed. The camera was put on the top part as that made more sense for 3d printing. We will discuss as a group and make edits to it for our project. 
 
 <img src="/notebooks/sarthak/OriginalBottomVision.png" alt="Bottom First Draft" width="300">
-<img src="/notebooks/sarthak/OriginalTopVision.png)" alt="Top First Draft" width="300">
+<img src="/notebooks/sarthak/OriginalTopVision.png" alt="Top First Draft" width="300">
 
 # 2024-04-09
 After discussion with the team, there were a few issues with the design. The first was that it would take too long to print and was too large to fit on the bed of the printer. Also the camera cable is not long enough to make it to the top of this box. Also an important realization is that we only need one side of the top so we make changed to the design. Also ordered fillament for 3d printing the rest of our materials 
 
 
-<img src="/notebooks/sarthak/finalBottom.png)" alt="Bottom Final draft" width="300">
+<img src="/notebooks/sarthak/finalBottom.png" alt="Bottom Final draft" width="300">
 <img src="/notebooks/sarthak/finalTop.png)" alt="Upper Final draft" width="300">
 
 
@@ -127,8 +127,8 @@ After discussion with the team, there were a few issues with the design. The fir
 # 2024-04-15
 GPIO was completed and tested on a breadboard. We used LED's to show that the correct signals are showing up when the proper gesture is being done. See Below
 
-<img src="/notebooks/sarthak/raspberryPi.jpg)" alt="Pi Connection" width="300">
-<img src="/notebooks/sarthak/breadboard.jpg)" alt="Upper Final draft" width="300">
+<img src="/notebooks/sarthak/raspberryPi.jpg" alt="Pi Connection" width="300">
+<img src="/notebooks/sarthak/breadboard.jpg" alt="Upper Final draft" width="300">
 
 You can see there is also a pus button which terminates our code. That is just used for when power goes out, we want the program to not be running to prvent disk access when shutting down 
 
@@ -143,4 +143,4 @@ Small edits needed to made to the 3d model and they need to be printed. Main iss
 # 2024-04-19
 The parts are printed and now I need to screw the pieces on. THe holes for the camera were a bit small and I needed to use sandpaper to open up the hole a little bit. All the pieces ended up fitting. See below for the final print with parts screwed in. 
 
-<img src="/notebooks/sarthak/finalEnclosure.jpeg)" alt="Upper Final " width="300">
+<img src="/notebooks/sarthak/finalEnclosure.jpeg" alt="Upper Final " width="300">
