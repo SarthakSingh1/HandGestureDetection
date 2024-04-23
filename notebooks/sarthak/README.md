@@ -120,7 +120,7 @@ After discussion with the team, there were a few issues with the design. The fir
 
 
 <img src="/notebooks/sarthak/finalBottom.png" alt="Bottom Final draft" width="300">
-<img src="/notebooks/sarthak/finalTop.png)" alt="Upper Final draft" width="300">
+<img src="/notebooks/sarthak/finalTop.png" alt="Upper Final draft" width="300">
 
 
 
@@ -144,3 +144,13 @@ Small edits needed to made to the 3d model and they need to be printed. Main iss
 The parts are printed and now I need to screw the pieces on. THe holes for the camera were a bit small and I needed to use sandpaper to open up the hole a little bit. All the pieces ended up fitting. See below for the final print with parts screwed in. 
 
 <img src="/notebooks/sarthak/finalEnclosure.jpeg" alt="Upper Final " width="300">
+
+# 2024-04-20
+My subsystems are used as inputs for the other subsystems however, it seems like our PCB has some issues since Sergio was not able to program our PCB. Therfore, to showcase that we can communicate externally, I need to build a circuit board connected to the gpio pins so worst case I can showcase the gesture system on a breadboard. 
+
+
+#2024-04-22 
+We tried to program the PCB a few more times, but there is issue after issue. Even the dev board is causing us problems so we are assuming our breaboard will be needed to communicate the performance of the gesture control subsystem. 
+
+#2024-04-23
+Over night, sergio was able fix the LCD code and so the UI subsystem works. I went into the lab to intergrate my gesture control subsystem with it. We were sucessfully able to translate a new gesture to a state change on the LCD. The breadboard is only needed for a push button to shut down the code, so we will try connecting the button directly to ground on the Pi to gain an extra 10 points. The code was being wierd when we did that so we are using a small circuit board for our demo 
