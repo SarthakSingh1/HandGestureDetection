@@ -23,6 +23,7 @@
 /* USER CODE BEGIN Includes */
 #include "stm32h7xx_hal.h" //Needed for I2C
 
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -46,7 +47,7 @@
 I2C_HandleTypeDef hi2c1;
 
 /* USER CODE BEGIN PV */
-static const uint8_t ST7036_I2C_ADDR = 0x78 << 1; //Slave address for LCD
+static const uint8_t ST7036_I2C_ADDR = 0x3c << 1; //Slave address for LCD
 
 /* USER CODE END PV */
 
@@ -96,7 +97,6 @@ int main(void)
   HAL_StatusTypeDef ret;
   uint8_t dataInit[2] = {0x00, 0x80};
 
-
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -118,45 +118,45 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	/* USER CODE END WHILE */
+    /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  	  	STATE2 = HAL_GPIO_ReadPin(GPIOD, STATE2_Pin);
-	      	STATE1 = HAL_GPIO_ReadPin(GPIOD, STATE1_Pin);
-	      	STATE0 = HAL_GPIO_ReadPin(GPIOD, STATE0_Pin);
-	      	sum = (STATE2 << 2) | (STATE1 << 1)  |  STATE0;
+	STATE2 = HAL_GPIO_ReadPin(GPIOD, STATE2_Pin);
+	STATE1 = HAL_GPIO_ReadPin(GPIOD, STATE1_Pin);
+	STATE0 = HAL_GPIO_ReadPin(GPIOD, STATE0_Pin);
+	sum = (STATE2 << 2) | (STATE1 << 1)  |  STATE0;
 
-	      	ret = HAL_I2C_Master_Transmit(&hi2c1, ST7036_I2C_ADDR, dataInit, 2, 100);
-	        if(ret != HAL_OK)
-	        {
-	      		Error_Handler();
-	      	}
+    ret = HAL_I2C_Master_Transmit(&hi2c1, ST7036_I2C_ADDR, dataInit, 2, 100);
+	if(ret != HAL_OK)
+	{
+		Error_Handler();
+	}
 
-	        HAL_Delay(1);
+	HAL_Delay(1);
 
-	      	switch (sum) {
-	      	   case 1:
-	      	    	Case1_LCD();
-	      	    	break;
-	      	   case 2:
-	      		    Case2_LCD();
-	      	    	break;
-	      	   case 3:
-	      		    Case3_LCD();
-	      	    	break;
-	      	   case 4:
-	      		    Case4_LCD();
-	      	    	break;
-	      	   case 5:
-	      		    Case5_LCD();
-	      	    	break;
-	      	   case 6:
-	      		    Case6_LCD();
-	      	    	break;
-	      	   default:
-	      		    Case7_LCD();
-	      	    	break;
-	      	}
+	switch (sum) {
+	   case 1:
+	      	Case1_LCD();
+	      	break;
+	   case 2:
+	        Case2_LCD();
+	      	break;
+	   case 3:
+	        Case3_LCD();
+	      	break;
+	   case 4:
+	        Case4_LCD();
+	      	break;
+	   case 5:
+	        Case5_LCD();
+	      	break;
+	   case 6:
+	        Case6_LCD();
+	      	break;
+	   default:
+	        Case7_LCD();
+	      	break;
+	}
 
   }
 
@@ -845,7 +845,7 @@ void Case6_LCD(void)
 	HAL_Delay(1);
 }
 
-void Case4_LCD(void)
+void Case7_LCD(void)
 {
 	uint8_t dataBuffer71[2] = {0x40, 0x4e}; //NO_HAND
 	uint8_t dataBuffer72[2] = {0x40, 0x4f}; //NO_HAND
