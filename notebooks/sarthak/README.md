@@ -154,3 +154,12 @@ We tried to program the PCB a few more times, but there is issue after issue. Ev
 
 #2024-04-23
 Over night, sergio was able fix the LCD code and so the UI subsystem works. I went into the lab to intergrate my gesture control subsystem with it. We were sucessfully able to translate a new gesture to a state change on the LCD. The breadboard is only needed for a push button to shut down the code, so we will try connecting the button directly to ground on the Pi to gain an extra 10 points. The code was being wierd when we did that so we are using a small circuit board for our demo 
+
+#2024-4-24
+After finishing our demo, we fully finished the development of our prototype. Today we met up in the lab to record videos for our extra credit video. We got videos of the full aparatus and explanations on our overall project. I spend a few hours today in final cut pro stitching together the videos and realized we didnt have a video of the power subsystem. I will go back tomorrow to re record that. 
+
+#2024-4-25 
+I got the final clips needed and finished up editing the video and submitted it. I also did some manual verification of the gesture constrol subsystem for our final report. I made 50 gestures and times how long it took to recognize that. I also wrote down how accurate the hand gesture was, I found on average it took 3 seconds while it was 98% accurate. 
+
+#2024-5-1
+I just wrapped up writing all my sections in the final report and this is the last entry in my notebook. As a summary, I was responsible for the gesture control subsystem, the 3d modeling and printing of our enclosure, and making our extra credit video. I beleive I put in my fair share of work and all of my assigned tasks were completed sucessfully and on time. I learned alot from building this product that I will apply in the future. 
